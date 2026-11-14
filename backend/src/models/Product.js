@@ -13,6 +13,9 @@ const productSchema = new mongoose.Schema({
   supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier' },
   title: { type: String, required: true },
   slug: { type: String, index: true },
+  brand: String,
+  source: { providerId: String, externalId: String, sku: String, importedAt: Date },
+  seo: { title: String, description: String, handle: String },
   description: String,
   status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
   images: [String],
@@ -27,4 +30,5 @@ const productSchema = new mongoose.Schema({
 
 productSchema.index({ store: 1, status: 1, createdAt: -1 });
 productSchema.index({ store: 1, 'variants.sku': 1 });
+productSchema.index({ store: 1, 'source.providerId': 1, 'source.externalId': 1 }, { sparse: true });
 export default mongoose.model('Product', productSchema);

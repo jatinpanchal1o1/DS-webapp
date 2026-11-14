@@ -7,7 +7,8 @@ const storeSchema = new mongoose.Schema({
   currency: { type: String, default: 'USD' },
   timezone: { type: String, default: 'UTC' },
   status: { type: String, enum: ['active', 'paused'], default: 'active' },
-  settings: { type: mongoose.Schema.Types.Mixed, default: {} }
+  settings: { type: mongoose.Schema.Types.Mixed, default: {} },
+  apiKeys: [{ name: String, prefix: String, hash: String, createdAt: { type: Date, default: Date.now }, lastUsedAt: Date }]
 }, { timestamps: true });
 
 export default mongoose.model('Store', storeSchema);

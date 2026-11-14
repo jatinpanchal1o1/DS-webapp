@@ -11,6 +11,8 @@ import supplierRoutes from './routes/supplier.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 import storefrontRoutes from './routes/storefront.routes.js';
+import integrationRoutes from './routes/integration.routes.js';
+import importRoutes from './routes/import.routes.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -30,6 +32,8 @@ app.use('/api/v1/suppliers', supplierRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/storefront', storefrontRoutes);
+app.use('/api/v1/integrations', integrationRoutes);
+app.use('/api/v1/import', importRoutes);
 app.use((req, res) => res.status(404).json({ message: 'API route not found' }));
 app.use((err, req, res, next) => {
   const status = err.status || (err.name === 'ValidationError' ? 400 : 500);

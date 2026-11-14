@@ -132,3 +132,73 @@ For example, after running the demo seed, open the `slug` printed/created for th
 The `/shop/:slug` and `/payment/result` frontend routes are deliberately evaluated before the dashboard login check. The SaaS dashboard remains authenticated. Do not put customer login in front of the public catalog.
 
 Public catalog API: `GET /api/v1/storefront/:slug` (optional `q`, `category` query parameters). This endpoint is intentionally unauthenticated and returns only published products belonging to the active store.
+
+## Supplier network, fulfillment connectors and product ingestion
+
+The platform now includes a provider registry and a credential-vault-backed integrations workspace for CJ Dropshipping, Amazon FBA/Multi-Channel Fulfillment, Zendrop, Spocket, AliExpress, ShipBob, ShipMonk, DSers and SaleHoo. Provider cards show the intended capabilities, documentation link and connection state. Credentials are encrypted at rest using AES-256-GCM; set `CREDENTIAL_ENCRYPTION_KEY` to a random secret of at least 32 characters and keep it outside source control.
+
+### Connector implementation status (read before enabling production)
+
+- **CJ Dropshipping:** API-key authentication and product catalogue search/import are implemented against CJ API 2.0. Imported products are drafts, with a starter 2.2x markup that must be reviewed before publication. CJ's API requires an API key, server-side token caching and the `CJ-Access-Token` header. See [CJ developer docs](https://developers.cjdropshipping.com/en/api/introduction.html).
+- **ShipBob:** credential capture and a live API authentication probe are implemented. Order creation, inventory mapping, webhook verification and tracking sync still need to be wired and tested against the merchant's sandbox/account. See [ShipBob developer docs](https://developer.shipbob.com/introduction).
+- **Amazon FBA/MCF:** the connection form stores the required seller app/LWA fields, but the OAuth authorization, SP-API signing, region routing and production approval flow are not yet implemented. Do not mark it live until these are complete. See [Amazon SP-API onboarding](https://developer-docs.amazon.com/sp-api/docs/onboarding-overview).
+- **Zendrop, Spocket, AliExpress, ShipMonk, DSers and SaleHoo:** provider definitions, credential fields, capability metadata and documentation links are included. Their API adapters must be completed using the access level, partner approval and current API contract granted to your account. The UI deliberately labels these as partner/approval-required instead of claiming a live connection.
+
+### Import products
+
+The authenticated product page includes a CSV/XLSX import tool. Uploads are limited to 12 MB and 5,000 product rows. Imports are created as drafts by default. Expected headers include `title`, `description`, `sku`, `costPrice`, `sellingPrice`, `inventory`, `category`, `image` and `tags`. XLSX parsing is handled by a small server-side ZIP/XML reader, so no spreadsheet runtime dependency is required.
+
+### Push products with your own script
+
+1. Open Products → Product import studio and generate a store import key.
+2. Copy the key immediately; only its SHA-256 hash is stored by DropPilot.
+3. Send JSON to `POST /api/v1/import/products/<store-slug>` with `X-DropPilot-Key` header.
+4. Send one product or `{ "products": [...] }` (maximum 500 per request). Use a stable `externalId` to upsert product records.
+
+Example:
+
+```js
+const response = await fetch('https://YOUR_API_HOST/api/v1/import/products/YOUR-STORE-SLUG', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-DropPilot-Key': process.env.DROPPILOT_IMPORT_KEY
+  },
+  body: JSON.stringify({
+    products: [{
+      externalId: 'SUP-1001',
+      title: 'Wireless Desk Lamp',
+      sku: 'LAMP-01',
+      costPrice: 12.5,
+      sellingPrice: 29.99,
+      inventory: 80,
+      category: 'Home & Living',
+      imageUrl: 'https://example.com/lamp.jpg'
+    }]
+  })
+});
+const result = await response.json();
+```
+
+Never expose this key in browser code or public repositories. Rotate/revoke it by deleting the corresponding key from the store's `apiKeys` collection or add a dedicated key-management UI before public multi-user launch.
+
+### API endpoints
+
+- `GET /api/v1/integrations/providers` — provider catalogue and capabilities.
+- `GET /api/v1/integrations` — current user's integration connections.
+- `POST /api/v1/integrations/:providerId/connect` — save encrypted credentials and run supported provider auth test.
+- `POST /api/v1/integrations/:id/test` — retest supported live connector.
+- `POST /api/v1/integrations/:id/sync-products` — CJ Dropshipping catalogue search/import (draft products).
+- `POST /api/v1/import/products/file` — authenticated CSV/XLSX import (multipart field `file`, plus `storeId`).
+- `POST /api/v1/import/script-key` — generate a store-specific product-ingestion key.
+- `POST /api/v1/import/products/:storeSlug` — API/script product upsert using `X-DropPilot-Key`.
+
+### Install / environment
+
+```bash
+npm install
+```
+
+Set both `JWT_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` in `backend/.env` to different, randomly generated secrets. The `.env.example` intentionally contains no real payment/provider credentials. Do not reuse any API key, PayU salt or database password that was previously committed or shared in a project archive; rotate those values before deployment.
+
+**Production gap:** This is an expanded implementation foundation, not a claim that every named provider is already live. Before real order volume, implement the remaining official provider OAuth/API contracts, fulfillment queues, webhook signature verification, idempotency, retries, reconciliation, tenant roles, audit logs, rate-limit policies, monitoring and sandbox acceptance tests. Provider API permissions and access are controlled by each provider.
